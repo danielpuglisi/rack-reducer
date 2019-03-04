@@ -2,6 +2,7 @@ require_relative 'spec_helper'
 require 'sinatra/base'
 require 'json'
 require 'benchmark/ips'
+require 'benchmark/memory'
 
 Conditionals = lambda do |params = {}|
   @artists = DB[:artists]
@@ -20,22 +21,31 @@ Reduction = lambda do |params = {}|
     ->(genre:) { grep(:genre, "%#{genre}%", case_insensitive: true) },
     ->(name:) { grep(:name, "%#{name}%", case_insensitive: true) },
   ])
-
   @artists.to_json
 end
 
-Benchmark.ips(3) do |bm|
-  bm.report('conditionals, empty params') { Conditionals.call }
+Beta = Rack::Reducer.new(
+  DB[:artists],
+  ->(genre:) { grep(:genre, "%#{genre}%", case_insensitive: true) },
+  ->(name:) { grep(:name, "%#{name}%", case_insensitive: true) },
+)
 
-  bm.report('reduction, empty params') { Reduction.call }
+%i[ips memory].each do |profile|
+  puts "Running benchmark/#{profile}..."
 
-  bm.report('conditionals, full params') do
-    Conditionals.call({ name: 'blake', genre: 'electric' })
+  Benchmark.send(profile) do |bm|
+    bm.report('raw conditionals') do
+      Conditionals.call({ name: 'blake', genre: 'electric' })
+    end
+
+    bm.report('reducer (1.0)') do
+      Reduction.call({ name: 'blake', genre: 'electric' })
+    end
+
+    bm.report('reducer (2.0 beta)') do
+      Beta.call({ name: 'blake', genre: 'electric' }).to_json
+    end
+
+    bm.compare!
   end
-
-  bm.report('reduction, full params') do
-    Reduction.call({ name: 'blake', genre: 'electric' })
-  end
-
-  bm.compare!
 end

@@ -21,15 +21,14 @@ module Rack
     #   end
     def self.call(params, dataset:, filters:)
       Reduction.new(
-        params: params,
         filters: filters,
         dataset: dataset
-      ).reduce
+      ).call(params)
     end
 
     # Mount Rack::Reducer as middleware
-    def self.new(app, options = {})
-      Middleware.new(app, options)
+    def self.new(dataset, *filters)
+      Reduction.new(filters: filters, dataset: dataset)
     end
 
     # Extend Rack::Reducer to get +reduce+ and +reduces+ as class-methods
